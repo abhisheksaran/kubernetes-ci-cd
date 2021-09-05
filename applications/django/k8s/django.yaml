@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-all-deployment
+spec:
+  selector:
+    matchLabels:
+      app: django
+  replicas: 1 # tells deployment to run 1 pods matching the template
+  template: # create pods using pod definition in this template
+    metadata:
+      labels:
+        app: django
+    spec:
+      containers:
+      - name: django
+        image: abhitrone/django_prometheus:2.0
+        ports:
+        - containerPort: 8000
+        env:
+        - name: HOST_IP
+          value: 192.168.64.2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-all-service
+  labels: 
+    app: django
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "30486" #dont know whats use of this
+spec:
+  type: NodePort
+  selector:
+    app: django
+  ports:
+  - name: djangoport
+    port: 8000
+    protocol: TCP 
+    targetPort: 8000
+    nodePort: 32204 #custom pod port, so that i can use this port below in service monitor
+  selector:
+    app: django
+
+---
+# service-monitor.yml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: django
+    release: prometheus
+  name: django
+  namespace: django
+spec:
+  endpoints:
+    - path: /metrics
+    - port: djangoport
+      relabelings:
+        - targetLabel: "__address__"
+          replacement: "192.168.64.2:32204" #host_pod_ip and custom  nodePort 
+  namespaceSelector:
+    matchNames:
+      - django
+  selector:
+    matchLabels:
+      app: django
+        #instance: django
+
+
+---
